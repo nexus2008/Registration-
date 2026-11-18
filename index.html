@@ -18,20 +18,20 @@
     body { margin: 0; background: var(--bg); color: var(--text); display: flex; flex-direction: column; min-height: 100vh; }
     header { background: var(--card); padding: 15px 25px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
     header h1 { margin: 0; font-size: 1.2rem; color: var(--accent); }
-    button { background: var(--accent); color: #0f172a; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    button { background: var(--accent); color: #0f172a; border: none; padding: 10px 18px; border-radius: 6px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 5px; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-danger { background: #ef4444; color: white; padding: 6px 12px; font-size: 0.85rem; }
+    .btn-danger { background: #ef4444; color: white; padding: 6px 12px; font-size: 0.85rem; width: auto; margin-top: 0; }
     .container { max-width: 1000px; margin: 20px auto; padding: 0 15px; width: 100%; flex: 1; }
     
     /* Login Box */
-    #login-box { max-width: 400px; margin: 60px auto; background: var(--card); padding: 25px; border-radius: 10px; }
-    input { width: 100%; padding: 10px; margin: 10px 0 15px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; }
+    #login-box { max-width: 400px; margin: 60px auto; background: var(--card); padding: 25px; border-radius: 10px; border: 1px solid #334155; }
+    input { width: 100%; padding: 12px; margin: 8px 0 15px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: white; font-size: 1rem; }
     
     /* Player & Playlist */
     #app-box { display: none; }
     .player-wrapper { background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 20px; position: relative; }
     video { width: 100%; max-height: 520px; display: block; }
-    #status-bar { padding: 10px; background: var(--card); font-size: 0.9rem; color: var(--accent); }
+    #status-bar { padding: 12px; background: var(--card); font-size: 0.9rem; color: var(--accent); }
     
     .video-list { display: grid; gap: 10px; }
     .video-item { background: var(--card); padding: 14px 18px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; }
@@ -50,21 +50,24 @@
 <div class="container">
   <!-- Login Section -->
   <div id="login-box">
-    <h2 style="margin-top:0;">Telegram Login</h2>
-    <p style="font-size:0.85rem; color:var(--muted);">මෙය පළමු වතාවට පමණක් අවශ්‍ය වේ. ඔබගේ දත්ත මෙම browser එකේ පමණක් සුරැකේ.</p>
+    <h2 style="margin-top:0; color:var(--accent);">Telegram Login</h2>
+    <p style="font-size:0.85rem; color:var(--muted);">පළමු වතාවට පමණක් දුරකථන අංකය ඇතුළත් කරන්න.</p>
+    
     <div id="step-phone">
-      <label>Phone Number (with +94):</label>
-      <input type="text" id="phone-input" placeholder="+94771234567" />
-      <button onclick="sendCode()">Send OTP Code</button>
+      <label>Phone Number:</label>
+      <input type="text" id="phone-input" value="+94" placeholder="+94771234567" />
+      <button id="send-btn" onclick="sendCode()">Send OTP Code</button>
     </div>
+
     <div id="step-code" style="display:none;">
       <label>Telegram OTP Code:</label>
       <input type="text" id="code-input" placeholder="12345" />
       <label>2FA Password (තිබේ නම් පමණක්):</label>
       <input type="password" id="pass-input" placeholder="Optional" />
-      <button onclick="verifyCode()">Verify & Open Channel</button>
+      <button id="verify-btn" onclick="verifyCode()">Verify & Open Channel</button>
     </div>
-    <p id="login-status" style="color:#f87171; font-size:0.85rem;"></p>
+
+    <p id="login-status" style="color:#f87171; font-size:0.85rem; margin-top:15px; word-break:break-all;"></p>
   </div>
 
   <!-- Main Study Channel Player -->
@@ -82,44 +85,64 @@
   // ================= CONFIGURATION =================
   const API_ID = 31954047;[cite: 3]
   const API_HASH = "2a056e91cca05c632e33ebbd3265c16b";[cite: 3]
-  const TARGET_CHANNEL_ID = "-1003949987871"; // ඔබේ නිවැරදි Study Channel ID එක
+  const TARGET_CHANNEL_ID = "-1003949987871";
   // ===================================================
-
-  const { TelegramClient, Api } = telegram;
-  const { StringSession } = telegram.sessions;
 
   let client;
   let phoneCodeHash;
-  let channelEntity;
 
   window.onload = async () => {
-    const savedSession = localStorage.getItem("tg_study_session") || "";
-    const session = new StringSession(savedSession);
-    client = new TelegramClient(session, API_ID, API_HASH, { connectionRetries: 5 });
+    const status = document.getElementById("login-status");
+    try {
+      if (typeof telegram === 'undefined') {
+        status.innerText = "Error: GramJS library failed to load from CDN. Check your internet connection.";
+        return;
+      }
 
-    if (savedSession) {
-      document.getElementById("login-box").style.display = "none";
-      document.getElementById("app-box").style.display = "block";
-      document.getElementById("logout-btn").style.display = "block";
-      document.getElementById("status-bar").innerText = "Telegram සමඟ සම්බන්ධ වෙමින් පවතී...";
-      await client.connect();
-      loadChannelVideos();
+      const { TelegramClient } = telegram;
+      const { StringSession } = telegram.sessions;
+
+      const savedSession = localStorage.getItem("tg_study_session") || "";
+      const session = new StringSession(savedSession);
+      client = new TelegramClient(session, API_ID, API_HASH, { connectionRetries: 5 });
+
+      if (savedSession) {
+        document.getElementById("login-box").style.display = "none";
+        document.getElementById("app-box").style.display = "block";
+        document.getElementById("logout-btn").style.display = "block";
+        document.getElementById("status-bar").innerText = "Telegram සමඟ සම්බන්ධ වෙමින් පවතී...";
+        await client.connect();
+        loadChannelVideos();
+      }
+    } catch (err) {
+      status.innerText = "Init Error: " + err.message;
     }
   };
 
   async function sendCode() {
     const phone = document.getElementById("phone-input").value.trim();
     const status = document.getElementById("login-status");
+    const btn = document.getElementById("send-btn");
+
+    if (!phone.startsWith("+")) {
+      status.innerText = "කරුණාකර දුරකථන අංකය රටේ කේතය සමඟ (+94...) ඇතුළත් කරන්න.";
+      return;
+    }
+
     try {
+      btn.disabled = true;
       status.innerText = "OTP කේතය යවමින් පවතී...";
+      
       await client.connect();
       const result = await client.sendCode({ apiId: API_ID, apiHash: API_HASH }, phone);
       phoneCodeHash = result.phoneCodeHash;
+
       document.getElementById("step-phone").style.display = "none";
       document.getElementById("step-code").style.display = "block";
       status.innerText = "";
     } catch (err) {
-      status.innerText = "Error: " + err.message;
+      status.innerText = "Send Code Error: " + err.message;
+      btn.disabled = false;
     }
   }
 
@@ -128,19 +151,24 @@
     const code = document.getElementById("code-input").value.trim();
     const password = document.getElementById("pass-input").value.trim();
     const status = document.getElementById("login-status");
+    const btn = document.getElementById("verify-btn");
 
     try {
+      btn.disabled = true;
       status.innerText = "පරීක්ෂා කරමින් පවතී...";
+      
       await client.start({
         phoneNumber: async () => phone,
         phoneCode: async () => code,
         password: async () => password,
         onError: (err) => { throw err; },
       });
+
       localStorage.setItem("tg_study_session", client.session.save());
       location.reload();
     } catch (err) {
       status.innerText = "Login Error: " + err.message;
+      btn.disabled = false;
     }
   }
 
@@ -149,7 +177,7 @@
     const statusBar = document.getElementById("status-bar");
 
     try {
-      channelEntity = await client.getEntity(TARGET_CHANNEL_ID);
+      const channelEntity = await client.getEntity(TARGET_CHANNEL_ID);
       document.getElementById("channel-title").innerText = "📚 " + (channelEntity.title || "Study Videos");
       statusBar.innerText = "Videos ලැයිස්තුව ලබාගනිමින් පවතී...";
 
@@ -191,7 +219,7 @@
 
     const player = document.getElementById("video-player");
     const statusBar = document.getElementById("status-bar");
-    statusBar.innerText = `Loading: "${title}"... (කරුණාකර මදක් රැඳී සිටින්න)`;
+    statusBar.innerText = `Loading: "${title}"...`;
 
     try {
       const buffer = await client.downloadMedia(msg, {
